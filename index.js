@@ -134,3 +134,132 @@ app.post('/search-pages', async (req, res) => {
     res.status(500).json({ error: 'Search failed' });
   }
 });
+
+// --- Phase 1 Expanded Endpoints ---
+
+// Update a block by ID
+app.post('/update-block', async (req, res) => {
+  const { block_id, new_text } = req.body;
+  try {
+    const response = await notion.patch(`/blocks/${block_id}`, {
+      paragraph: {
+        rich_text: [
+          { type: 'text', text: { content: new_text } }
+        ]
+      }
+    });
+    res.json({ success: true, result: response.data });
+  } catch (err) {
+    console.error(err.response?.data || err);
+    res.status(500).json({ error: 'Failed to update block' });
+  }
+});
+
+// Summarize a page and write the summary
+app.post('/summarize-page', async (req, res) => {
+  const { page_id } = req.body;
+  try {
+    const blocks = await notion.get(`/blocks/${page_id}/children?page_size=100`);
+    const fullText = blocks.data.results
+      .filter(b => b.type === 'paragraph')
+      .map(b => b.paragraph?.rich_text?.[0]?.plain_text || "")
+      .join("\n");
+
+    const completion = await openai.createChatCompletion({
+      model: 'gpt-4o',
+      messages: [
+        { role: 'system', content: 'Summarize this Notion page into key insights in paragraph form.' },
+        { role: 'user', content: fullText }
+      ]
+    });
+
+    const summary = completion.data.choices[0].message.content;
+
+    const response = await notion.post('/pages', {
+      parent: { page_id },
+      properties: {
+        title: { title: [{ type: 'text', text: { content: 'Summary of Page' } }] }
+      },
+      children: [{
+        object: 'block',
+        type: 'paragraph',
+        paragraph: {
+          rich_text: [{ type: 'text', text: { content: summary } }]
+        }
+      }]
+    });
+
+    res.json({ success: true, summary, page_id: response.data.id });
+  } catch (err) {
+    console.error(err.response?.data || err);
+    res.status(500).json({ error: 'Failed to summarize or write to Notion' });
+  }
+});
+
+// Create a new Notion database
+app.post('/create-database', async (req, res) => {
+  const { parent_page_id, title, properties } = req.body;
+  try {
+    const response = await notion.post('/databases', {
+      parent: { page_id: parent_page_id },
+      title: [{ type: 'text', text: { content: title }}],
+      properties
+    });
+    res.json({ success: true, db_id: response.data.id });
+  } catch (err) {
+    console.error(err.response?.data || err);
+    res.status(500).json({ error: 'Failed to create database' });
+  }
+});
+
+// Add entry to database
+app.post('/add-database-entry', async (req, res) => {
+  const { database_id, properties } = req.body;
+  try {
+    const response = await notion.post('/pages', {
+      parent: { database_id },
+      properties
+    });
+    res.json({ success: true, entry_id: response.data.id });
+  } catch (err) {
+    console.error(err.response?.data || err);
+    res.status(500).json({ error: 'Failed to add entry' });
+  }
+});
+
+// Query database by filter
+app.post('/query-database', async (req, res) => {
+  const { database_id, filter } = req.body;
+  try {
+    const response = await notion.post(`/databases/${database_id}/query`, { filter });
+    res.json({ results: response.data.results });
+  } catch (err) {
+    console.error(err.response?.data || err);
+    res.status(500).json({ error: 'Failed to query database' });
+  }
+});
+
+// Submit an idea to the "inbox"
+app.post('/submit-idea', async (req, res) => {
+  const { database_id, idea } = req.body;
+  try {
+    const response = await notion.post('/pages', {
+      parent: { database_id },
+      properties: {
+        Name: {
+          title: [{ type: 'text', text: { content: idea } }]
+        }
+      }
+    });
+    res.json({ success: true, entry_id: response.data.id });
+  } catch (err) {
+    console.error(err.response?.data || err);
+    res.status(500).json({ error: 'Failed to submit idea' });
+  }
+});
+
+// Weekly summary endpoint (placeholder)
+app.get('/weekly-summary', async (req, res) => {
+  // This would eventually query edited pages or a log DB
+  res.json({ summary: "This is where your weekly digest would go. Summaries of page edits, new entries, and trends." });
+});
