@@ -42,74 +42,85 @@ async function formatMultiSelectOptions(values, dbId, fieldName) {
 
 // ✅ Endpoint: Submit Article with relations and tags
 app.post('/submit-article', async (req, res) => {
-  const {
-    title,
-    url,
-    summary,
-    type,
-    topics = [],
-    authors = [],
-    organizations = [],
-    events = [],
-    publishedDate,
-    source
-  } = req.body;
-
-  try {
-    const articleDbId = process.env.ARTICLES_DB_ID;
-
-    const authorIds = await Promise.all(authors.map(name => getOrCreateEntityByName(name, process.env.PEOPLE_DB_ID)));
-    const orgIds = await Promise.all(organizations.map(name => getOrCreateEntityByName(name, process.env.ORGS_DB_ID)));
-    const eventIds = await Promise.all(events.map(name => getOrCreateEntityByName(name, process.env.EVENTS_DB_ID)));
-
-    const formattedTopics = await formatMultiSelectOptions(topics, articleDbId, 'Topics');
-    const formattedType = type ? [{ name: type }] : [];
-
-    const newPage = await notion.pages.create({
-      parent: { database_id: articleDbId },
-      properties: {
-        Name: {
-          title: [{ text: { content: title } }]
-        },
-        'Source URL': {
-          url: url
-        },
-        Summary: {
-          rich_text: [{ text: { content: summary || '' } }]
-        },
-        Type: {
-          multi_select: formattedType
-        },
-        Topics: {
-          multi_select: formattedTopics
-        },
-        Authors: {
-          relation: authorIds.map(id => ({ id }))
-        },
-        Organizations: {
-          relation: orgIds.map(id => ({ id }))
-        },
-        Events: {
-          relation: eventIds.map(id => ({ id }))
-        },
-        'Published Date': publishedDate
-          ? { date: { start: publishedDate } }
-          : undefined,
-        Source: {
-          rich_text: [{ text: { content: source || '' } }]
-        }
+    const notion = new Client({ auth: process.env.NOTION_TOKEN });
+    const dbId = process.env.ARTICLES_DB_ID;
+  
+    const { title, url, summary, authors, type, topics, organizations, people, events } = req.body;
+  
+    try {
+      // Fetch database properties
+      const db = await notion.databases.retrieve({ database_id: dbId });
+      const props = db.properties;
+  
+      const properties = {};
+  
+      // Always include title (Notion requires a title field)
+      if (props["Name"]) {
+        properties["Name"] = {
+          title: [
+            {
+              text: { content: title || "Untitled Article" }
+            }
+          ]
+        };
       }
-    });
-
-    res.json({ status: 'success', pageId: newPage.id });
-  } catch (error) {
-    console.error('❌ Error:', error.message);
-    res.status(500).json({ error: 'Failed to submit article', details: error.message });
-  }
-});
-
-// 🔁 Start server
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-  console.log(`🚀 Symbiotica GPT Bridge running on http://localhost:${PORT}`);
-});
+  
+      if (url && props["Source URL"] && props["Source URL"].type === "url") {
+        properties["Source URL"] = { url };
+      }
+  
+      if (summary && props["Summary"] && props["Summary"].type === "rich_text") {
+        properties["Summary"] = {
+          rich_text: [{ text: { content: summary } }]
+        };
+      }
+  
+      if (authors && props["Authors"] && props["Authors"].type === "multi_select") {
+        properties["Authors"] = {
+          multi_select: authors.map(name => ({ name }))
+        };
+      }
+  
+      if (type && props["Type"] && props["Type"].type === "select") {
+        properties["Type"] = { select: { name: type } };
+      }
+  
+      if (topics && props["Topics"] && props["Topics"].type === "multi_select") {
+        properties["Topics"] = {
+          multi_select: topics.map(t => ({ name: t }))
+        };
+      }
+  
+      if (organizations && props["Organizations"] && props["Organizations"].type === "relation") {
+        properties["Organizations"] = {
+          relation: organizations.map(id => ({ id }))
+        };
+      }
+  
+      if (people && props["People"] && props["People"].type === "relation") {
+        properties["People"] = {
+          relation: people.map(id => ({ id }))
+        };
+      }
+  
+      if (events && props["Events"] && props["Events"].type === "relation") {
+        properties["Events"] = {
+          relation: events.map(id => ({ id }))
+        };
+      }
+  
+      // Create the page
+      const newPage = await notion.pages.create({
+        parent: { database_id: dbId },
+        properties
+      });
+  
+      res.json({ status: "success", pageId: newPage.id });
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({
+        error: "Failed to submit article",
+        details: err.message
+      });
+    }
+  });
