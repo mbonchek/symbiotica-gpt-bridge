@@ -130,3 +130,67 @@ app.post('/submit-article', async (req, res) => {
       });
     }
   });
+
+  const unfluff = require('unfluff');
+
+
+// ✅ Endpoint: Parse Article 
+app.post('/parse-article', async (req, res) => {
+  const { url } = req.body;
+  if (!url) {
+    return res.status(400).json({ error: 'URL is required' });
+  }
+
+  try {
+    // Step 1: Fetch raw HTML
+    const html = await axios.get(url).then(r => r.data);
+
+    // Step 2: Extract article content
+    const parsed = unfluff(html);
+
+    const articleText = parsed.text?.slice(0, 6000); // limit for GPT
+    const rawTitle = parsed.title;
+    const rawAuthor = parsed.author;
+
+    // Step 3: Use GPT to generate structured summary
+    const openaiRes = await axios.post(
+      'https://api.openai.com/v1/chat/completions',
+      {
+        model: "gpt-4",
+        messages: [
+          {
+            role: "system",
+            content: "You are a content analyst that extracts structured data from articles."
+          },
+          {
+            role: "user",
+            content: `Here is an article. Extract the following: title, author, summary, topics (as keywords), type (e.g. news, opinion, research). Then return it as JSON.
+
+Title: ${rawTitle}
+Author: ${rawAuthor}
+Content:
+${articleText}`
+          }
+        ],
+        temperature: 0.3
+      },
+      {
+        headers: {
+          Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
+          'Content-Type': 'application/json'
+        }
+      }
+    );
+
+    const structured = openaiRes.data.choices?.[0]?.message?.content;
+
+    res.json({ parsed, structured });
+
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({
+      error: 'Failed to parse and analyze article',
+      details: err.message
+    });
+  }
+});
