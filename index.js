@@ -52,6 +52,37 @@ app.post('/get-page', async (req, res) => {
   }
 });
 
+app.post('/create-page', async (req, res) => {
+  const { title, parent_page_id, content } = req.body;
+
+  try {
+    const response = await notion.post('/pages', {
+      parent: { page_id: parent_page_id },
+      properties: {
+        title: [{
+          type: 'text',
+          text: { content: title }
+        }]
+      },
+      children: content ? [{
+        object: 'block',
+        type: 'paragraph',
+        paragraph: {
+          rich_text: [{
+            type: 'text',
+            text: { content: content }
+          }]
+        }
+      }] : []
+    });
+
+    res.json({ success: true, page_id: response.data.id });
+  } catch (err) {
+    console.error(err.response?.data || err);
+    res.status(500).json({ error: 'Failed to create Notion page' });
+  }
+});
+
 app.post('/write-to-page', async (req, res) => {
   const { page_id, new_content } = req.body;
 
