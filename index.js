@@ -52,6 +52,33 @@ app.post('/get-page', async (req, res) => {
   }
 });
 
+app.post('/write-to-page', async (req, res) => {
+  const { page_id, new_content } = req.body;
+
+  try {
+    const response = await notion.post(`/blocks/${page_id}/children`, {
+      children: [
+        {
+          object: 'block',
+          type: 'paragraph',
+          paragraph: {
+            rich_text: [
+              {
+                type: 'text',
+                text: { content: new_content }
+              }
+            ]
+          }
+        }
+      ]
+    });
+
+    res.json({ success: true, result: response.data });
+  } catch (err) {
+    console.error(err.response?.data || err);
+    res.status(500).json({ error: 'Failed to write to Notion' });
+  }
+});
 
 
 app.listen(3000, () => {
