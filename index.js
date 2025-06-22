@@ -83,6 +83,54 @@ app.post('/write-to-page', async (req, res) => {
 });
 
 
-app.listen(3000, () => {
-  console.log('Symbiotica GPT Bridge running on http://localhost:3000');
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => {
+  console.log(`Symbiotica GPT Bridge running on http://localhost:${PORT}`);
+});
+
+// List all accessible pages
+app.get('/list-pages', async (req, res) => {
+  try {
+    const response = await notion.post('/search', {
+      sort: { direction: 'descending', timestamp: 'last_edited_time' },
+      page_size: 25
+    });
+
+    const pages = response.data.results
+      .filter(p => p.object === 'page')
+      .map(p => ({
+        page_id: p.id,
+        title: p.properties?.title?.title?.[0]?.plain_text || "Untitled"
+      }));
+
+    res.json({ pages });
+  } catch (err) {
+    console.error(err.response?.data || err);
+    res.status(500).json({ error: 'Failed to list Notion pages' });
+  }
+});
+
+// Search for pages by query string
+app.post('/search-pages', async (req, res) => {
+  const { query } = req.body;
+
+  try {
+    const response = await notion.post('/search', {
+      query,
+      sort: { direction: 'descending', timestamp: 'last_edited_time' },
+      page_size: 25
+    });
+
+    const results = response.data.results
+      .filter(p => p.object === 'page')
+      .map(p => ({
+        page_id: p.id,
+        title: p.properties?.title?.title?.[0]?.plain_text || "Untitled"
+      }));
+
+    res.json({ results });
+  } catch (err) {
+    console.error(err.response?.data || err);
+    res.status(500).json({ error: 'Search failed' });
+  }
 });
