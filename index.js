@@ -1,6 +1,13 @@
 const express = require('express');
 const axios = require('axios');
 require('dotenv').config();
+
+console.log("🔍 DEBUG: Loaded environment variables:");
+console.log("NOTION_TOKEN:", !!process.env.NOTION_TOKEN);
+console.log("HELP_PAGE_ID:", process.env.HELP_PAGE_ID);
+console.log("HELP_DB_ID:", process.env.HELP_DB_ID);
+console.log("IDEA_INBOX_DB_ID:", process.env.IDEA_INBOX_DB_ID);
+
 const bodyParser = require('body-parser');
 
 const app = express();
