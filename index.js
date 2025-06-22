@@ -56,7 +56,7 @@ app.post('/write-to-page', async (req, res) => {
   const { page_id, new_content } = req.body;
 
   try {
-    const response = await notion.post(`/blocks/${page_id}/children`, {
+    const response = await notion.patch(`/blocks/${page_id}/children`, {
       children: [
         {
           object: 'block',
@@ -65,7 +65,9 @@ app.post('/write-to-page', async (req, res) => {
             rich_text: [
               {
                 type: 'text',
-                text: { content: new_content }
+                text: {
+                  content: new_content
+                }
               }
             ]
           }
