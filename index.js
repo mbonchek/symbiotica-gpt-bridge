@@ -8,6 +8,12 @@ require('dotenv').config();
 const app = express();
 app.use(bodyParser.json());
 
+const PORT = process.env.PORT || 3000;
+
+app.listen(PORT, () => {
+  console.log(`Symbiotica GPT Bridge running on http://localhost:${PORT}`);
+});
+
 const notion = new Client({ auth: process.env.NOTION_TOKEN });
 
 // 🔧 Utility: Get or create a page in a linked database
